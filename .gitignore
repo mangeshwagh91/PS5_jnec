@@ -1,0 +1,47 @@
+# Project customizations
+.github/chatmodes/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend build artifacts and deps
+client/node_modules/
+client/dist/
+client/dist-ssr/
+
+# Python envs and cache
+.venv/
+server/.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Test and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Local environment files
+.env
+.env.*
+client/.env
+server/.env
+
+# Model/training outputs
+runs/
+weights/

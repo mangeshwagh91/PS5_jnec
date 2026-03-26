@@ -1,0 +1,13 @@
+{
+  "knife": "weapon",
+  "pistol": "weapon",
+  "gun": "weapon",
+  "trash": "trash_bag",
+  "garbage": "trash_bag",
+  "waste": "trash_bag",
+  "fire": "fire",
+  "smoke": "smoke",
+  "person": "person",
+  "running": "running",
+  "crowd": "crowd"
+}
