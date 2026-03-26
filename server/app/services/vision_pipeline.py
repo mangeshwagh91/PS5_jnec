@@ -32,9 +32,10 @@ class VisionRuleEngine:
     - hazard: requires short consecutive confirmations
     """
 
-    WEAPON_LABELS = {"weapon", "gun", "knife"}
+    WEAPON_LABELS = {"weapon", "gun", "knife", "pistol", "rifle", "firearm"}
     GARBAGE_LABELS = {"garbage", "trash", "trash_bag", "dumping"}
-    HAZARD_LABELS = {"hazard", "fire", "smoke", "spill", "leak"}
+    FIRE_LABELS = {"fire", "flame"}
+    HAZARD_LABELS = {"hazard", "smoke", "spill", "leak"}
     CONTEXT_LABELS = {"person", "running", "crowd", "smoke"}
 
     def __init__(
@@ -150,6 +151,8 @@ class VisionRuleEngine:
             threat_type: ThreatType | None = None
             if label in self.WEAPON_LABELS:
                 threat_type = ThreatType.weapon
+            elif label in self.FIRE_LABELS:
+                threat_type = ThreatType.fire
             elif label in self.GARBAGE_LABELS:
                 threat_type = ThreatType.garbage
             elif label in self.HAZARD_LABELS:

@@ -1,8 +1,8 @@
-const VIDEO_POOL = ['/videos/Firing.mp4', '/videos/smoke_fire.mp4'];
+const VIDEO_POOL = ['/videos/Firing.mp4?v=20260326-1657', '/videos/smoke_fire.mp4'];
 export const DEMO_CAMERA_IDS = ['CAM-012', 'CAM-013'] as const;
 
 const EXPLICIT_CAMERA_VIDEO_MAP: Record<string, string> = {
-  'CAM-012': '/videos/Firing.mp4',
+  'CAM-012': '/videos/Firing.mp4?v=20260326-1657',
   'CAM-013': '/videos/smoke_fire.mp4',
 };
 

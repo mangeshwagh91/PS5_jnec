@@ -43,6 +43,7 @@ class InMemoryStore:
     def seed(self) -> None:
         cameras = [
             Camera(id="CAM-012", name="Gate B North", location="North Entrance", status="alert", threat_count=1),
+            Camera(id="CAM-013", name="Lab Smoke/Fire Demo", location="Safety Wing", status="online", threat_count=0),
             Camera(id="CAM-023", name="Perimeter East", location="East Fence", status="alert", threat_count=1),
             Camera(id="CAM-034", name="Residential 7", location="Block 7", status="online", threat_count=0),
             Camera(id="CAM-045", name="Parking C", location="Lot C", status="alert", threat_count=1),
@@ -61,9 +62,18 @@ class InMemoryStore:
             self._stats_cache = None
 
             camera = self._cameras.get(alert.camera_id)
-            if camera:
-                camera.status = "alert"
-                camera.threat_count += 1
+            if not camera:
+                camera = Camera(
+                    id=alert.camera_id,
+                    name=alert.camera_id,
+                    location=alert.location,
+                    status="alert",
+                    threat_count=0,
+                )
+                self._cameras[alert.camera_id] = camera
+
+            camera.status = "alert"
+            camera.threat_count += 1
 
     def list_alerts(
         self,
@@ -103,7 +113,29 @@ class InMemoryStore:
 
     def get_cameras(self) -> list[Camera]:
         with self._lock:
-            return sorted(self._cameras.values(), key=lambda cam: cam.id)
+            active_by_camera: dict[str, int] = {}
+            for alert in self._alerts.values():
+                if alert.status == AlertStatus.active:
+                    active_by_camera[alert.camera_id] = active_by_camera.get(alert.camera_id, 0) + 1
+
+            cameras: list[Camera] = []
+            for camera in self._cameras.values():
+                active_count = active_by_camera.get(camera.id, 0)
+                computed_status = camera.status
+                if camera.status != "offline":
+                    computed_status = "alert" if active_count > 0 else "online"
+
+                cameras.append(
+                    Camera(
+                        id=camera.id,
+                        name=camera.name,
+                        location=camera.location,
+                        status=computed_status,
+                        threat_count=active_count,
+                    )
+                )
+
+            return sorted(cameras, key=lambda cam: cam.id)
 
     def get_stats(self) -> DashboardStats:
         now = datetime.now(timezone.utc)

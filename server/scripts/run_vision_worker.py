@@ -3,10 +3,16 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib import error, request
+
+# Allow running as a script (python scripts/run_vision_worker.py) without manual PYTHONPATH export.
+REPO_SERVER_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_SERVER_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_SERVER_ROOT))
 
 from app.services.vision_pipeline import RawDetection, VisionRuleEngine
 
@@ -27,6 +33,10 @@ class WorkerConfig:
     show_overlay: bool
     device: str
     inference_imgsz: int
+    preview_output_path: str
+    camera_fps: float
+    camera_width: int
+    camera_height: int
 
 
 class _MockDetector:
@@ -88,7 +98,7 @@ class _YoloDetector:
         return detections
 
 
-def _post_event(base_url: str, api_key: str, payload: dict) -> int:
+def _post_event(base_url: str, api_key: str, payload: dict) -> tuple[int, str]:
     body = json.dumps(payload).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -96,7 +106,15 @@ def _post_event(base_url: str, api_key: str, payload: dict) -> int:
 
     req = request.Request(url=f"{base_url}/events", data=body, headers=headers, method="POST")
     with request.urlopen(req, timeout=10) as resp:
-        return resp.status
+        detail = ""
+        raw = resp.read().decode("utf-8", errors="ignore")
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                detail = str(parsed.get("detail", ""))
+            except Exception:
+                detail = ""
+        return resp.status, detail
 
 
 def _load_label_map(path_str: str) -> dict[str, str]:
@@ -119,16 +137,22 @@ def _load_label_map(path_str: str) -> dict[str, str]:
 
 def _parse_args() -> WorkerConfig:
     parser = argparse.ArgumentParser(description="Vision worker that turns camera detections into dashboard events")
-    parser.add_argument("--api-base-url", default="http://localhost:8000/api/v1")
-    parser.add_argument("--api-key", default="")
+    parser.add_argument("--api-base-url", "--base-url", dest="api_base_url", default="http://localhost:8000/api/v1")
+    parser.add_argument("--api-key", "--ingestion-api-key", dest="api_key", default="")
     parser.add_argument("--stream-url", default="0", help="RTSP URL, video file path, or webcam index")
     parser.add_argument("--camera-id", default="CAM-012")
     parser.add_argument("--location", default="North Entrance")
     parser.add_argument("--source", default="cctv")
-    parser.add_argument("--sample-every-n-frames", type=int, default=6)
+    parser.add_argument("--sample-every-n-frames", type=int, default=2)
     parser.add_argument("--min-confidence", type=float, default=0.55)
     parser.add_argument("--mode", choices=["mock", "yolo"], default="mock")
-    parser.add_argument("--yolo-weights", default="", help="Path to YOLO weights (.pt). Defaults to yolo11n.pt when empty")
+    parser.add_argument(
+        "--yolo-weights",
+        "--weights",
+        dest="yolo_weights",
+        default="",
+        help="Path to YOLO weights (.pt). Defaults to yolo11n.pt when empty",
+    )
     parser.add_argument(
         "--label-map",
         default="",
@@ -137,6 +161,10 @@ def _parse_args() -> WorkerConfig:
     parser.add_argument("--show-overlay", action="store_true", help="Show realtime detections in an OpenCV window")
     parser.add_argument("--device", default="", help="Inference device, e.g. cpu, 0, cuda:0")
     parser.add_argument("--inference-imgsz", type=int, default=416, help="Inference image size for speed/accuracy tradeoff")
+    parser.add_argument("--preview-output-path", default="", help="Optional path to write latest processed frame as JPEG")
+    parser.add_argument("--camera-fps", type=float, default=60.0, help="Requested FPS for webcam sources")
+    parser.add_argument("--camera-width", type=int, default=1280, help="Requested webcam capture width")
+    parser.add_argument("--camera-height", type=int, default=720, help="Requested webcam capture height")
     args = parser.parse_args()
 
     cfg = WorkerConfig(
@@ -154,6 +182,10 @@ def _parse_args() -> WorkerConfig:
         show_overlay=args.show_overlay,
         device=args.device,
         inference_imgsz=args.inference_imgsz,
+        preview_output_path=args.preview_output_path,
+        camera_fps=max(args.camera_fps, 1.0),
+        camera_width=max(args.camera_width, 160),
+        camera_height=max(args.camera_height, 120),
     )
     return cfg
 
@@ -203,9 +235,37 @@ def main() -> None:
         raise RuntimeError("opencv-python-headless is required for vision worker") from exc
 
     source = int(cfg.stream_url) if cfg.stream_url.isdigit() else cfg.stream_url
+    is_local_file_source = isinstance(source, str) and Path(source).exists()
+
+    preview_output = cfg.preview_output_path.strip()
+    if not preview_output:
+        preview_output = str(Path(__file__).resolve().parents[2] / "client" / "public" / "live" / f"{cfg.camera_id}.jpg")
+    preview_output_path = Path(preview_output)
+    preview_output_path.parent.mkdir(parents=True, exist_ok=True)
     cap = cv2.VideoCapture(source)
+
+    if isinstance(source, int):
+        cap.set(cv2.CAP_PROP_FPS, cfg.camera_fps)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.camera_width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.camera_height)
+
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open stream source: {cfg.stream_url}")
+
+    stream_fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+    stream_w = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0.0
+    stream_h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0.0
+    if isinstance(source, int):
+        print(
+            f"Webcam request: {cfg.camera_width}x{cfg.camera_height} @ {cfg.camera_fps:.1f} FPS"
+            f" | actual: {int(stream_w)}x{int(stream_h)} @ {stream_fps:.2f} FPS"
+        )
+    if stream_fps > 0:
+        effective_interval_ms = (cfg.sample_every_n_frames / stream_fps) * 1000.0
+        print(
+            f"Sampling every {cfg.sample_every_n_frames} frame(s) at {stream_fps:.2f} FPS"
+            f" -> effective interval {effective_interval_ms:.1f} ms"
+        )
 
     frame_idx = 0
     sent = 0
@@ -220,6 +280,11 @@ def main() -> None:
         while True:
             ok, frame = cap.read()
             if not ok:
+                # Local video files can reach EOF; rewind so detections continue.
+                if is_local_file_source:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+
                 time.sleep(0.2)
                 continue
 
@@ -243,6 +308,11 @@ def main() -> None:
             detections = [d for d in detections if d.confidence >= cfg.min_confidence]
             last_detections = detections
 
+            try:
+                cv2.imwrite(str(preview_output_path), frame)
+            except Exception:
+                pass
+
             if cfg.show_overlay:
                 _draw_overlay(frame, detections)
                 cv2.imshow("Vision Worker", frame)
@@ -261,9 +331,15 @@ def main() -> None:
             for event in events:
                 payload = event.model_dump(mode="json")
                 try:
-                    status = _post_event(cfg.api_base_url, cfg.api_key, payload)
+                    status, detail = _post_event(cfg.api_base_url, cfg.api_key, payload)
                     sent += 1
-                    print(f"[{sent}] status={status} type={payload['threat_type']} conf={payload['confidence']}")
+                    if status == 202:
+                        note = detail or "ignored/deduplicated by backend"
+                        print(
+                            f"[{sent}] status={status} type={payload['threat_type']} conf={payload['confidence']} note={note}"
+                        )
+                    else:
+                        print(f"[{sent}] status={status} type={payload['threat_type']} conf={payload['confidence']}")
                 except error.HTTPError as exc:
                     print(f"Event rejected: HTTP {exc.code}")
                 except Exception as exc:  # pragma: no cover

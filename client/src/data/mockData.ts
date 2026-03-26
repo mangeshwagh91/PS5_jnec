@@ -79,11 +79,11 @@ export const severityColors: Record<Severity, string> = {
 };
 
 export const threatIcons: Record<ThreatType, string> = {
-  weapon: 'WPN',
-  garbage: 'GBG',
-  hazard: 'HZD',
-  intrusion: 'INT',
-  fire: 'FIR',
+  weapon: '🔫',
+  garbage: '🗑️',
+  hazard: '⚠️',
+  intrusion: '🚨',
+  fire: '🔥',
 };
 
 export const alertTimeline = [

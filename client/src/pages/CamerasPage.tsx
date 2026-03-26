@@ -5,6 +5,8 @@ import { Video, AlertTriangle, WifiOff } from 'lucide-react';
 import { useSurveillanceData } from '@/hooks/useSurveillanceData';
 import { getCameraVideoSource, getCameraVideoFallback } from '@/lib/cameraVideoMap';
 
+const WEBCAM_CAMERA_ID = 'CAM-WEBCAM-01';
+
 const statusConfig = {
   online: { label: 'Online', color: 'text-success', bg: 'bg-success/10 border-success/20', icon: Video },
   offline: { label: 'Offline', color: 'text-muted-foreground', bg: 'bg-muted border-border', icon: WifiOff },
@@ -29,41 +31,74 @@ function getDemoCameraCards(cameras: CameraFeed[]): CameraFeed[] {
     threatCount: 0,
   };
 
-  return [cam012, cam013];
+  const webcam = byId.get(WEBCAM_CAMERA_ID) ?? {
+    id: WEBCAM_CAMERA_ID,
+    name: 'Live Webcam',
+    location: 'Local Device',
+    status: 'online',
+    threatCount: 0,
+  };
+
+  return [cam012, cam013, webcam];
 }
 
 const CameraPreview = ({ cameraId }: { cameraId: string }) => {
   const [src, setSrc] = useState(() => getCameraVideoSource(cameraId));
   const [failed, setFailed] = useState(false);
   const [usedFallback, setUsedFallback] = useState(false);
+  const [snapshotTs, setSnapshotTs] = useState(() => Date.now());
+  const isWebcam = cameraId === WEBCAM_CAMERA_ID;
 
   useEffect(() => {
-    setSrc(getCameraVideoSource(cameraId));
+    if (!isWebcam) {
+      setSrc(getCameraVideoSource(cameraId));
+    }
     setFailed(false);
     setUsedFallback(false);
-  }, [cameraId]);
+  }, [cameraId, isWebcam]);
+
+  useEffect(() => {
+    if (!isWebcam) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setSnapshotTs(Date.now());
+    }, 500);
+
+    return () => clearInterval(timer);
+  }, [isWebcam]);
 
   return (
     <>
       {!failed ? (
-        <video
-          className="h-full w-full object-cover"
-          autoPlay
-          loop
-          muted
-          playsInline
-          controls
-          preload="auto"
-          src={src}
-          onError={() => {
-            if (!usedFallback) {
-              setSrc(getCameraVideoFallback(cameraId));
-              setUsedFallback(true);
-              return;
-            }
-            setFailed(true);
-          }}
-        />
+        isWebcam ? (
+          <img
+            className="h-full w-full object-cover"
+            src={`/live/${WEBCAM_CAMERA_ID}.jpg?t=${snapshotTs}`}
+            alt="Live webcam"
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <video
+            className="h-full w-full object-cover"
+            autoPlay
+            loop
+            muted
+            playsInline
+            controls
+            preload="auto"
+            src={src}
+            onError={() => {
+              if (!usedFallback) {
+                setSrc(getCameraVideoFallback(cameraId));
+                setUsedFallback(true);
+                return;
+              }
+              setFailed(true);
+            }}
+          />
+        )
       ) : (
         <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
           Video unavailable
