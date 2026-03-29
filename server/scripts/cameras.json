@@ -1,0 +1,8 @@
+[
+  {
+    "camera_id": "CAM-006",
+    "stream_url": "0",
+    "location": "Live Camera (Reception)",
+    "sample_every_n_frames": 2
+  }
+]

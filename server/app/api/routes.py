@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import shutil
+from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.api.deps import get_engine, get_role, get_store, get_ws_manager, verify_ingestion_api_key
 from app.models.schemas import (
@@ -17,6 +20,40 @@ from app.services.store import InMemoryStore
 from app.services.websocket_manager import WebSocketManager
 
 router = APIRouter(prefix="/api/v1", tags=["surveillance"])
+REPO_ROOT = Path(__file__).resolve().parents[3]
+VIDEO_DIR = REPO_ROOT / "videos"
+LIVE_PREVIEW_DIR = REPO_ROOT / "client" / "public" / "live"
+VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v", ".avi", ".mkv"}
+LIVE_FRAME_STALE_SECONDS = 20
+
+
+def _format_video_label(file_name: str) -> str:
+    stem = Path(file_name).stem.replace("_", " ").replace("-", " ").strip()
+    return " ".join(part.capitalize() for part in stem.split()) or "Video Feed"
+
+
+@router.get("")
+@router.get("/")
+def api_index() -> dict[str, object]:
+    return {
+        "service": "surveillance-api",
+        "status": "ok",
+        "version": "v1",
+        "docs": "/docs",
+        "health": "/api/v1/health",
+        "endpoints": [
+            "/api/v1/alerts",
+            "/api/v1/events",
+            "/api/v1/stats",
+            "/api/v1/cameras",
+            "/api/v1/analytics/timeline",
+            "/api/v1/threat-map",
+            "/api/v1/queue",
+            "/api/v1/live-cameras",
+            "/api/v1/videos",
+            "/api/v1/videos/upload",
+        ],
+    }
 
 
 @router.get("/health")
@@ -152,3 +189,76 @@ def queue(
     store: InMemoryStore = Depends(get_store),
 ):
     return store.peek_queue()
+
+
+@router.get("/live-cameras")
+def list_live_cameras() -> dict[str, list[str]]:
+    if not LIVE_PREVIEW_DIR.exists():
+        return {"items": []}
+
+    freshness_cutoff = datetime.now(timezone.utc) - timedelta(seconds=LIVE_FRAME_STALE_SECONDS)
+    camera_ids: list[str] = []
+    for path in sorted(LIVE_PREVIEW_DIR.iterdir(), key=lambda item: item.name.lower()):
+        if not path.is_file() or path.suffix.lower() not in {".jpg", ".jpeg"}:
+            continue
+
+        modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        if modified_at < freshness_cutoff:
+            continue
+
+        camera_id = path.stem.strip()
+        if camera_id:
+            camera_ids.append(camera_id)
+
+    return {"items": camera_ids}
+
+
+@router.get("/videos")
+def list_videos() -> dict[str, list[dict[str, str]]]:
+    if not VIDEO_DIR.exists():
+        return {"items": []}
+
+    videos: list[dict[str, str]] = []
+    for path in sorted(VIDEO_DIR.iterdir(), key=lambda item: item.name.lower()):
+        if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
+            continue
+
+        videos.append(
+            {
+                "filename": path.name,
+                "label": _format_video_label(path.name),
+                "url": f"/media/videos/{quote(path.name)}",
+            }
+        )
+
+    return {"items": videos}
+
+
+@router.post("/videos/upload")
+async def upload_video(file: UploadFile = File(...)) -> dict[str, dict[str, str]]:
+    raw_name = Path(file.filename or "uploaded-video.mp4").name
+    extension = Path(raw_name).suffix.lower()
+    if extension not in VIDEO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {extension or 'unknown'}")
+
+    VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+
+    target_name = raw_name
+    destination = VIDEO_DIR / target_name
+    if destination.exists():
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        target_name = f"{Path(raw_name).stem}_{stamp}{extension}"
+        destination = VIDEO_DIR / target_name
+
+    with destination.open("wb") as output:
+        shutil.copyfileobj(file.file, output)
+
+    await file.close()
+
+    return {
+        "item": {
+            "filename": target_name,
+            "label": _format_video_label(target_name),
+            "url": f"/media/videos/{quote(target_name)}",
+        }
+    }

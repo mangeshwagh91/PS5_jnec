@@ -45,6 +45,30 @@ type BackendCamera = {
 	threat_count: number;
 };
 
+type BackendVideo = {
+	filename: string;
+	label: string;
+	url: string;
+};
+
+type BackendVideosResponse = {
+	items: BackendVideo[];
+};
+
+type BackendLiveCamerasResponse = {
+	items: string[];
+};
+
+type BackendVideoUploadResponse = {
+	item: BackendVideo;
+};
+
+export type VideoStream = {
+	filename: string;
+	label: string;
+	url: string;
+};
+
 export type TimelineEntry = {
 	hour: string;
 	weapon: number;
@@ -54,7 +78,7 @@ export type TimelineEntry = {
 	fire: number;
 };
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8000/api/v1';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8001/api/v1';
 const API_ROLE = (import.meta.env.VITE_SURVEILLANCE_ROLE as string | undefined) ?? 'admin';
 
 function toRelativeTime(isoDate: string): string {
@@ -171,6 +195,54 @@ export async function fetchTimeline(): Promise<TimelineEntry[]> {
 	} catch {
 		return alertTimeline;
 	}
+}
+
+export async function fetchVideos(): Promise<VideoStream[]> {
+	try {
+		const response = await requestJson<BackendVideosResponse>('/videos');
+		return response.items;
+	} catch {
+		return [];
+	}
+}
+
+export async function fetchLiveCameras(): Promise<string[]> {
+	try {
+		const response = await requestJson<BackendLiveCamerasResponse>('/live-cameras');
+		return response.items;
+	} catch {
+		return [];
+	}
+}
+
+export async function uploadVideo(file: File): Promise<VideoStream> {
+	const formData = new FormData();
+	formData.append('file', file);
+
+	const response = await fetch(`${API_BASE_URL}/videos/upload`, {
+		method: 'POST',
+		headers: {
+			'x-user-role': API_ROLE,
+			'x-role': API_ROLE,
+		},
+		body: formData,
+	});
+
+	if (!response.ok) {
+		let detail = `Upload failed: ${response.status}`;
+		try {
+			const payload = (await response.json()) as { detail?: string };
+			if (payload?.detail) {
+				detail = payload.detail;
+			}
+		} catch {
+			// Keep default message.
+		}
+		throw new Error(detail);
+	}
+
+	const payload = (await response.json()) as BackendVideoUploadResponse;
+	return payload.item;
 }
 
 export function getAlertsWebSocketUrl(): string {

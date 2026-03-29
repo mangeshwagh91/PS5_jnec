@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import heapq
+import json
+import os
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 
 from app.models.schemas import (
     Alert,
@@ -30,6 +33,22 @@ SEVERITY_PRIORITY = {
     "low": 4,
 }
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CONTROL_ROOM_CONFIG_PATH = REPO_ROOT / "configs" / "control_room_cameras.json"
+CAMERA_CONFIG_ENV_VAR = "CAMERA_CONFIG_PATH"
+
+
+def _resolve_camera_config_path() -> Path:
+    override = os.getenv(CAMERA_CONFIG_ENV_VAR, "").strip()
+    if not override:
+        return CONTROL_ROOM_CONFIG_PATH
+
+    override_path = Path(override)
+    if override_path.is_absolute():
+        return override_path
+
+    return (REPO_ROOT / override_path).resolve()
+
 
 class InMemoryStore:
     def __init__(self, stats_cache_ttl_seconds: int = 5) -> None:
@@ -41,17 +60,41 @@ class InMemoryStore:
         self._stats_cache: tuple[datetime, DashboardStats] | None = None
 
     def seed(self) -> None:
-        cameras = [
-            Camera(id="CAM-012", name="Gate B North", location="North Entrance", status="alert", threat_count=1),
-            Camera(id="CAM-013", name="Lab Smoke/Fire Demo", location="Safety Wing", status="online", threat_count=0),
-            Camera(id="CAM-023", name="Perimeter East", location="East Fence", status="alert", threat_count=1),
-            Camera(id="CAM-034", name="Residential 7", location="Block 7", status="online", threat_count=0),
-            Camera(id="CAM-045", name="Parking C", location="Lot C", status="alert", threat_count=1),
-            Camera(id="CAM-056", name="Transit Hub", location="Platform 2", status="online", threat_count=0),
-            Camera(id="CAM-067", name="Construction A", location="Zone Alpha", status="online", threat_count=0),
-            Camera(id="CAM-078", name="Chemical Storage", location="Unit 3", status="alert", threat_count=1),
-            Camera(id="CAM-091", name="Warehouse B", location="District B", status="alert", threat_count=1),
-        ]
+        cameras: list[Camera] = []
+        camera_config_path = _resolve_camera_config_path()
+
+        if camera_config_path.exists():
+            try:
+                raw = json.loads(camera_config_path.read_text(encoding="utf-8-sig"))
+                if isinstance(raw, list):
+                    for entry in raw:
+                        if not isinstance(entry, dict):
+                            continue
+
+                        camera_id = str(entry.get("camera_id", "")).strip()
+                        if not camera_id:
+                            continue
+
+                        location = str(entry.get("location", camera_id)).strip() or camera_id
+                        name = location
+                        cameras.append(
+                            Camera(
+                                id=camera_id,
+                                name=name,
+                                location=location,
+                                status="online",
+                                threat_count=0,
+                            )
+                        )
+            except Exception:
+                pass
+
+        if not cameras:
+            cameras = [
+                Camera(id="CAM-012", name="Gate B North", location="North Entrance", status="online", threat_count=0),
+                Camera(id="CAM-013", name="Parking Lot C", location="Lot C", status="online", threat_count=0),
+            ]
+
         with self._lock:
             self._cameras = {camera.id: camera for camera in cameras}
 

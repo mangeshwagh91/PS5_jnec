@@ -3,9 +3,12 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from contextlib import suppress
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.core.config import get_settings
@@ -15,6 +18,38 @@ from app.services.store import InMemoryStore
 from app.services.websocket_manager import WebSocketManager
 
 settings = get_settings()
+REPO_ROOT = Path(__file__).resolve().parents[2]
+VIDEO_DIR = REPO_ROOT / "videos"
+PREVIEW_DIR = REPO_ROOT / "client" / "public" / "live"
+
+
+async def _mjpeg_generator(camera_id: str):
+    preview_path = PREVIEW_DIR / f"{camera_id}.jpg"
+    last_mtime_ns = -1
+
+    while True:
+        try:
+            file_stat = preview_path.stat()
+            if file_stat.st_size > 0 and file_stat.st_mtime_ns != last_mtime_ns:
+                frame_bytes = preview_path.read_bytes()
+                last_mtime_ns = file_stat.st_mtime_ns
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: "
+                    + str(len(frame_bytes)).encode("ascii")
+                    + b"\r\n\r\n"
+                    + frame_bytes
+                    + b"\r\n"
+                )
+        except FileNotFoundError:
+            pass
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
+
+        await asyncio.sleep(0.05)
 
 
 @asynccontextmanager
@@ -25,6 +60,7 @@ async def lifespan(app: FastAPI):
     engine = EventEngine(
         confidence_threshold=settings.detection_confidence_threshold,
         dedup_window_seconds=settings.dedup_window_seconds,
+        hazard_confidence_threshold=settings.hazard_confidence_threshold,
     )
     ws_manager = WebSocketManager()
 
@@ -71,6 +107,18 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+if VIDEO_DIR.exists():
+    app.mount("/media/videos", StaticFiles(directory=str(VIDEO_DIR)), name="media-videos")
+
+
+@app.get("/live/{camera_id}/stream")
+async def mjpeg_stream(camera_id: str):
+    return StreamingResponse(
+        _mjpeg_generator(camera_id),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"},
+    )
 
 
 @app.get("/")

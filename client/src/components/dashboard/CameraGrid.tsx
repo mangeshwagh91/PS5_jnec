@@ -11,41 +11,61 @@ const statusStyle: Record<string, string> = {
   alert: 'bg-red-500',
 };
 
-function getDemoCameraCards(cameras: CameraFeed[]): CameraFeed[] {
-  const byId = new Map(cameras.map((camera) => [camera.id, camera]));
-  const cam012 = byId.get('CAM-012') ?? {
-    id: 'CAM-012',
-    name: 'Gate B North',
-    location: 'North Entrance',
-    status: 'online',
-    threatCount: 0,
-  };
-
-  const cam013 = byId.get('CAM-013') ?? {
-    id: 'CAM-013',
-    name: 'Lab Smoke/Fire Demo',
-    location: 'Safety Wing',
-    status: 'online',
-    threatCount: 0,
-  };
-
-  const webcam = byId.get(WEBCAM_CAMERA_ID) ?? {
-    id: WEBCAM_CAMERA_ID,
-    name: 'Live Webcam',
-    location: 'Local Device',
-    status: 'online',
-    threatCount: 0,
-  };
-
-  return [cam012, cam013, webcam];
+function rankCamera(camera: CameraFeed): number {
+  if (camera.status === 'alert' || camera.threatCount > 0) {
+    return 0;
+  }
+  if (camera.status === 'online') {
+    return 1;
+  }
+  return 2;
 }
 
-const CameraPreview = ({ cameraId }: { cameraId: string }) => {
+function getOrderedCameraCards(cameras: CameraFeed[], maxCards: number): CameraFeed[] {
+  if (cameras.length === 0) {
+    return [];
+  }
+
+  const ordered = [...cameras].sort((a, b) => {
+    const rankDiff = rankCamera(a) - rankCamera(b);
+    if (rankDiff !== 0) {
+      return rankDiff;
+    }
+
+    const threatDiff = (b.threatCount ?? 0) - (a.threatCount ?? 0);
+    if (threatDiff !== 0) {
+      return threatDiff;
+    }
+
+    return a.id.localeCompare(b.id);
+  });
+
+  return ordered.slice(0, Math.max(maxCards, 1));
+}
+
+function getBackendOrigin(): string {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8001/api/v1';
+  const root = new URL(apiBase);
+  root.pathname = '';
+  root.search = '';
+  root.hash = '';
+  return root.toString().replace(/\/$/, '');
+}
+
+function getMjpegStreamUrl(cameraId: string): string {
+  return `${getBackendOrigin()}/live/${encodeURIComponent(cameraId)}/stream`;
+}
+
+const CameraPreview = ({ cameraId, useOverlayFrame }: { cameraId: string; useOverlayFrame: boolean }) => {
   const [src, setSrc] = useState(() => getCameraVideoSource(cameraId));
   const [failed, setFailed] = useState(false);
   const [usedFallback, setUsedFallback] = useState(false);
+  const [mjpegFailed, setMjpegFailed] = useState(false);
+  const [mjpegLoaded, setMjpegLoaded] = useState(false);
+  const [jpegFailed, setJpegFailed] = useState(false);
   const [snapshotTs, setSnapshotTs] = useState(() => Date.now());
   const isWebcam = cameraId === WEBCAM_CAMERA_ID;
+  const wantsImagePreview = isWebcam || useOverlayFrame;
 
   useEffect(() => {
     if (!isWebcam) {
@@ -53,30 +73,68 @@ const CameraPreview = ({ cameraId }: { cameraId: string }) => {
     }
     setFailed(false);
     setUsedFallback(false);
+    setMjpegFailed(false);
+    setMjpegLoaded(false);
+    setJpegFailed(false);
   }, [cameraId, isWebcam]);
 
   useEffect(() => {
-    if (!isWebcam) {
+    if (!wantsImagePreview || mjpegFailed || mjpegLoaded) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setMjpegFailed(true);
+    }, isWebcam ? 1500 : 2000);
+
+    return () => clearTimeout(timeout);
+  }, [isWebcam, wantsImagePreview, mjpegFailed, mjpegLoaded]);
+
+  useEffect(() => {
+    const shouldPollSnapshot = wantsImagePreview && mjpegFailed && !jpegFailed;
+    if (!shouldPollSnapshot) {
       return;
     }
 
     const timer = setInterval(() => {
       setSnapshotTs(Date.now());
-    }, 500);
+    }, isWebcam ? 500 : 450);
 
     return () => clearInterval(timer);
-  }, [isWebcam]);
+  }, [isWebcam, wantsImagePreview, mjpegFailed, jpegFailed]);
 
   return (
     <>
       {!failed ? (
-        isWebcam ? (
+        wantsImagePreview && !mjpegFailed ? (
           <img
             className="h-full w-full object-cover"
-            src={`/live/${WEBCAM_CAMERA_ID}.jpg?t=${snapshotTs}`}
-            alt="Live webcam"
-            onError={() => setFailed(true)}
+            src={getMjpegStreamUrl(cameraId)}
+            alt={isWebcam ? 'Live webcam' : `${cameraId} threat overlay stream`}
+            onLoad={() => {
+              setMjpegLoaded(true);
+            }}
+            onError={() => {
+              setMjpegFailed(true);
+            }}
           />
+        ) : wantsImagePreview && !jpegFailed ? (
+          <img
+            className="h-full w-full object-cover"
+            src={`/live/${cameraId}.jpg?t=${snapshotTs}`}
+            alt={isWebcam ? 'Live webcam' : `${cameraId} threat overlay`}
+            onError={() => {
+              if (isWebcam) {
+                setFailed(true);
+                return;
+              }
+              setJpegFailed(true);
+            }}
+          />
+        ) : isWebcam ? (
+          <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-500">
+            Video unavailable
+          </div>
         ) : (
           <video
             className="h-full w-full object-cover"
@@ -84,7 +142,6 @@ const CameraPreview = ({ cameraId }: { cameraId: string }) => {
             loop
             muted
             playsInline
-            controls
             preload="auto"
             src={src}
             onError={() => {
@@ -107,7 +164,7 @@ const CameraPreview = ({ cameraId }: { cameraId: string }) => {
 };
 
 const CameraGrid = ({ cameras }: { cameras: CameraFeed[] }) => {
-  const visibleCameras = getDemoCameraCards(cameras);
+  const visibleCameras = getOrderedCameraCards(cameras, 8);
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl flex flex-col shadow-sm">
@@ -125,7 +182,7 @@ const CameraGrid = ({ cameras }: { cameras: CameraFeed[] }) => {
           }`}
         >
           <div className="aspect-video rounded-md mb-2 overflow-hidden border border-slate-200 bg-slate-100">
-            <CameraPreview cameraId={cam.id} />
+            <CameraPreview cameraId={cam.id} useOverlayFrame={cam.status !== 'offline'} />
           </div>
           <div className="flex items-center justify-between mb-1">
             <span className="font-mono text-slate-500">{cam.id}</span>

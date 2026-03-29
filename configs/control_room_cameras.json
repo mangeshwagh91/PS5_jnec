@@ -1,0 +1,10 @@
+[
+  {
+    "camera_id": "CAM-WEBCAM-01",
+    "location": "Local Testing",
+    "stream_url": "0",
+    "profile": "weapon",
+    "weights": "models/weights/firing_1.pt",
+    "extra_args": "--sample-every-n-frames 1 --preview-write-every-n-frames 1"
+  }
+]

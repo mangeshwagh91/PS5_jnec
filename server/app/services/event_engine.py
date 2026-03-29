@@ -7,9 +7,11 @@ from app.models.schemas import Alert, AlertStatus, DetectionEventIn, Severity, T
 
 
 class EventEngine:
-    def __init__(self, confidence_threshold: float, dedup_window_seconds: int) -> None:
+    def __init__(self, confidence_threshold: float, dedup_window_seconds: int, hazard_confidence_threshold: float) -> None:
         self.confidence_threshold = confidence_threshold
         self.dedup_window_seconds = dedup_window_seconds
+        # Smoke scores from compact fire/smoke models are often low; cap hazard threshold for reliability.
+        self.hazard_confidence_threshold = min(max(hazard_confidence_threshold, 0.0), 0.02)
         self._last_seen: dict[str, datetime] = {}
 
     def build_dedup_key(self, event: DetectionEventIn) -> str:
@@ -49,6 +51,9 @@ class EventEngine:
         return Severity.low
 
     def should_process(self, event: DetectionEventIn) -> bool:
+        threat_value = str(getattr(event.threat_type, "value", event.threat_type)).strip().lower()
+        if "hazard" in threat_value:
+            return event.confidence >= self.hazard_confidence_threshold
         return event.confidence >= self.confidence_threshold
 
     def is_deduplicated(self, dedup_key: str) -> bool:

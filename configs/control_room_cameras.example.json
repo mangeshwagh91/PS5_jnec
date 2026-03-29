@@ -1,0 +1,34 @@
+[
+  {
+    "camera_id": "CAM-012",
+    "location": "Gate B North",
+    "stream_url": "..\\videos\\Firing.mp4",
+    "profile": "weapon",
+    "weights": "models/weights/firing_2.pt",
+    "extra_args": "--profile weapon --sample-every-n-frames 2 --yolo-conf 0.2 --preview-write-every-n-frames 1"
+  },
+  {
+    "camera_id": "CAM-013",
+    "location": "Parking Lot C",
+    "stream_url": "..\\videos\\smoke_fire.mp4",
+    "profile": "fire-smoke",
+    "weights": "models/weights/fire_smoke_2.pt",
+    "extra_args": "--profile fire-smoke --sample-every-n-frames 1 --yolo-conf 0.01 --smoke-confidence-threshold 0.02 --fire-confidence-threshold 0.2 --smoke-confirmation-frames 1 --preview-write-every-n-frames 1"
+  },
+  {
+    "camera_id": "CAM-101",
+    "location": "Classroom Block A",
+    "stream_url": "rtsp://10.0.0.101/stream1",
+    "profile": "weapon",
+    "weights": "",
+    "extra_args": ""
+  },
+  {
+    "camera_id": "CAM-102",
+    "location": "Playground South",
+    "stream_url": "rtsp://10.0.0.102/stream1",
+    "profile": "fire-smoke",
+    "weights": "",
+    "extra_args": ""
+  }
+]

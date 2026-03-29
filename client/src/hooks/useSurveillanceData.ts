@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchAlerts,
   fetchCameras,
+  fetchLiveCameras,
   fetchStats,
   fetchTimeline,
+  fetchVideos,
   getAlertsWebSocketUrl,
 } from '@/lib/surveillanceApi';
 
@@ -37,6 +39,18 @@ export function useSurveillanceData() {
     queryKey: ['surveillance', 'timeline'],
     queryFn: fetchTimeline,
     refetchInterval: 30000,
+  });
+
+  const videosQuery = useQuery({
+    queryKey: ['surveillance', 'videos'],
+    queryFn: fetchVideos,
+    refetchInterval: 10000,
+  });
+
+  const liveCamerasQuery = useQuery({
+    queryKey: ['surveillance', 'live-cameras'],
+    queryFn: fetchLiveCameras,
+    refetchInterval: 5000,
   });
 
   useEffect(() => {
@@ -132,7 +146,15 @@ export function useSurveillanceData() {
     alerts: alertsQuery.data ?? [],
     stats: statsQuery.data,
     cameras: camerasQuery.data ?? [],
+    liveCameraIds: liveCamerasQuery.data ?? [],
     timeline: timelineQuery.data ?? [],
-    isLoading: alertsQuery.isLoading || statsQuery.isLoading || camerasQuery.isLoading || timelineQuery.isLoading,
+    videos: videosQuery.data ?? [],
+    isLoading:
+      alertsQuery.isLoading ||
+      statsQuery.isLoading ||
+      camerasQuery.isLoading ||
+      timelineQuery.isLoading ||
+      videosQuery.isLoading ||
+      liveCamerasQuery.isLoading,
   };
 }

@@ -44,6 +44,7 @@ class VisionRuleEngine:
         weapon_window_seconds: int = 2,
         garbage_dwell_seconds: int = 20,
         hazard_consecutive_frames: int = 2,
+        smoke_consecutive_frames: int = 5,
         hazard_window_seconds: int = 2,
         cooldown_seconds: int = 30,
     ) -> None:
@@ -51,6 +52,7 @@ class VisionRuleEngine:
         self.weapon_window_seconds = max(weapon_window_seconds, 1)
         self.garbage_dwell_seconds = max(garbage_dwell_seconds, 1)
         self.hazard_consecutive_frames = max(hazard_consecutive_frames, 1)
+        self.smoke_consecutive_frames = max(smoke_consecutive_frames, 1)
         self.hazard_window_seconds = max(hazard_window_seconds, 1)
         self.cooldown_seconds = max(cooldown_seconds, 1)
 
@@ -93,6 +95,7 @@ class VisionRuleEngine:
         location: str,
         source: str,
         context_signals: list[str],
+        hazard_confirmation_frames: int | None = None,
     ) -> DetectionEventIn | None:
         key = self._key(threat_type, det, location)
         state = self._get_state(key)
@@ -106,7 +109,8 @@ class VisionRuleEngine:
         elif threat_type == ThreatType.hazard:
             state.hits.append(now)
             self._trim_hits(state, now, self.hazard_window_seconds)
-            if len(state.hits) < self.hazard_consecutive_frames or not self._cooldown_ready(state, now):
+            required_hazard_frames = hazard_confirmation_frames or self.hazard_consecutive_frames
+            if len(state.hits) < required_hazard_frames or not self._cooldown_ready(state, now):
                 return None
 
         elif threat_type == ThreatType.garbage:
@@ -171,6 +175,7 @@ class VisionRuleEngine:
                 location=location,
                 source=source,
                 context_signals=context_signals,
+                hazard_confirmation_frames=self.smoke_consecutive_frames if label == "smoke" else self.hazard_consecutive_frames,
             )
             if event is not None:
                 events.append(event)

@@ -2,9 +2,12 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ThreatMap from '@/components/dashboard/ThreatMap';
 import { severityColors, threatIcons } from '@/data/mockData';
 import { useSurveillanceData } from '@/hooks/useSurveillanceData';
+import { useNavigate } from 'react-router-dom';
 
 const ThreatMapPage = () => {
+  const navigate = useNavigate();
   const { alerts } = useSurveillanceData();
+  const activeAlerts = alerts.filter((a) => a.status !== 'resolved');
 
   return (
     <DashboardLayout title="THREAT MAP">
@@ -15,8 +18,8 @@ const ThreatMapPage = () => {
       <div className="col-span-3 bg-card border border-border rounded-lg p-4 overflow-y-auto max-h-[calc(100vh-120px)]">
         <h2 className="text-xs font-mono text-muted-foreground tracking-widest mb-3">ACTIVE ZONES</h2>
         <div className="space-y-2">
-          {alerts.filter(a => a.status !== 'resolved').map(alert => (
-            <div key={alert.id} className="border border-border rounded-md p-3 hover:bg-secondary/50 cursor-pointer transition-colors">
+          {activeAlerts.map(alert => (
+            <div key={alert.id} className="border border-border rounded-md p-3 hover:bg-secondary/50 transition-colors">
               <div className="flex items-center gap-2 mb-1">
                 <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-mono text-slate-600">
                   {threatIcons[alert.type]}
@@ -28,6 +31,13 @@ const ThreatMapPage = () => {
               </div>
               <p className="text-xs text-foreground">{alert.location}</p>
               <p className="text-[10px] text-muted-foreground mt-1">{alert.camera} • {alert.timestamp}</p>
+              <button
+                type="button"
+                className="mt-2 text-[10px] font-mono uppercase text-primary hover:underline"
+                onClick={() => navigate(`/cameras?focus=${encodeURIComponent(alert.camera)}`)}
+              >
+                Open Camera Feed
+              </button>
             </div>
           ))}
         </div>

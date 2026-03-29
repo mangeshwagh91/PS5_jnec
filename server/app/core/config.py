@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:8080,http://127.0.0.1:8080"
 
     detection_confidence_threshold: float = 0.55
+    hazard_confidence_threshold: float = 0.02
     dedup_window_seconds: int = 120
     simulation_enabled: bool = True
     simulation_interval_seconds: int = 6
