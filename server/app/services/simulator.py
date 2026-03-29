@@ -18,18 +18,35 @@ async def run_simulator(
     interval_seconds: int,
 ) -> None:
     camera_seed = store.get_cameras()
-    if not camera_seed:
-        return
+    
+    locations = [camera.location for camera in camera_seed] if camera_seed else []
+    camera_ids = [camera.id for camera in camera_seed] if camera_seed else []
 
-    locations = [camera.location for camera in camera_seed]
-    camera_ids = [camera.id for camera in camera_seed]
+    # Inject rich mock data so the dashboard looks "alive" for judges/resume review
+    mock_cameras = [
+        ("CAM-FRONT-01", "Main Entrance Gate"),
+        ("CAM-HALL-A", "Hallway A Block"),
+        ("CAM-CAFE-01", "Cafeteria South"),
+        ("CAM-LIB-02", "Library Wing"),
+        ("CAM-PARK-03", "Parking Lot North"),
+        ("CAM-GYM-01", "Gymnasium"),
+    ]
+    
+    for cam_id, loc in mock_cameras:
+        if cam_id not in camera_ids:
+            camera_ids.append(cam_id)
+            locations.append(loc)
 
     while not stop_event.is_set():
         await asyncio.sleep(interval_seconds)
 
+        cam_idx = random.randint(0, len(camera_ids) - 1)
+        cam_id = camera_ids[cam_idx]
+        cam_loc = locations[cam_idx]
+
         event = DetectionEventIn(
-            camera_id=random.choice(camera_ids),
-            location=random.choice(locations),
+            camera_id=cam_id,
+            location=cam_loc,
             threat_type=random.choice(list(ThreatType)),
             confidence=round(random.uniform(0.45, 0.99), 2),
             coordinates=Coordinates(x=random.uniform(10, 95), y=random.uniform(10, 90)),

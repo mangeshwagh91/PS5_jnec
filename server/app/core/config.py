@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     hazard_confidence_threshold: float = 0.02
     dedup_window_seconds: int = 120
     simulation_enabled: bool = True
-    simulation_interval_seconds: int = 6
+    simulation_interval_seconds: int = 3
     stats_cache_ttl_seconds: int = 5
     ingestion_api_key: str = ""
 

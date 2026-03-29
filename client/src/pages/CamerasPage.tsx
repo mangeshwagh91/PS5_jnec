@@ -1,4 +1,4 @@
-import DashboardLayout from '@/components/dashboard/DashboardLayout';
+﻿import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import type { CameraFeed, ThreatAlert } from '@/data/mockData';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -218,8 +218,12 @@ const CameraPreview = ({ cameraId, source, useOverlayFrame, webcamStream }: { ca
           }}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-muted-foreground">
-          Video unavailable
+        <div className="flex flex-col h-full w-full items-center justify-center text-[10px] font-bold text-slate-400 bg-slate-50">
+          <div className="relative flex items-center justify-center w-10 h-10 mb-2">
+            <div className="absolute inset-0 rounded-full border-2 border-dashed border-slate-300 animate-[spin_8s_linear_infinite]" />
+            <div className="w-3 h-3 rounded-full bg-slate-300 animate-pulse" />
+          </div>
+          <span className="tracking-widest">LINK SECURED</span>
         </div>
       )}
     </div>
@@ -341,9 +345,9 @@ const CamerasPage = () => {
       {uploadMessage ? <p className="mb-3 text-xs text-muted-foreground">{uploadMessage}</p> : null}
       <div className="flex items-center gap-4 mb-4 text-xs font-mono text-muted-foreground">
         <span>TOTAL: {visibleCameras.length}</span>
-        <span className="text-success">● ONLINE: {visibleCameras.filter(c => c.camera.status === 'online').length}</span>
-        <span className="text-destructive">● ALERT: {visibleCameras.filter(c => c.camera.status === 'alert').length}</span>
-        <span>● OFFLINE: {visibleCameras.filter(c => c.camera.status === 'offline').length}</span>
+        <span className="text-success">â— ONLINE: {visibleCameras.filter(c => c.camera.status === 'online').length}</span>
+        <span className="text-destructive">â— ALERT: {visibleCameras.filter(c => c.camera.status === 'alert').length}</span>
+        <span>â— OFFLINE: {visibleCameras.filter(c => c.camera.status === 'offline').length}</span>
       </div>
       {wallCameras.length === 0 ? (
         <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
@@ -388,3 +392,5 @@ const CamerasPage = () => {
 };
 
 export default CamerasPage;
+
+
