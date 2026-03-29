@@ -78,8 +78,8 @@ export type TimelineEntry = {
 	fire: number;
 };
 
-const isProd = import.meta.env.PROD;
-const defaultApi = isProd ? 'https://ps5-jnec.onrender.com/api/v1' : 'http://localhost:8001/api/v1';
+const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const defaultApi = isLocalhost ? 'http://localhost:8001/api/v1' : 'https://ps5-jnec.onrender.com/api/v1';
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? defaultApi;
 const API_ROLE = (import.meta.env.VITE_SURVEILLANCE_ROLE as string | undefined) ?? 'admin';
 
