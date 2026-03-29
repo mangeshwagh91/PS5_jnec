@@ -48,7 +48,7 @@ export function AppSidebar() {
           <Shield className="w-5 h-5 text-white" />
         </div>
         {!collapsed && (
-          <span className="text-base font-bold text-slate-900 tracking-tight">PS5 Sentinel</span>
+          <span className="text-base font-bold text-slate-900 tracking-tight">Sentinel AI</span>
         )}
       </div>
 

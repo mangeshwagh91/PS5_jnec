@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Integrated Multi-Threat Surveillance API"
+    app_name: str = "Sentinel AI API"
     app_env: str = "dev"
     app_host: str = "0.0.0.0"
     app_port: int = 8000

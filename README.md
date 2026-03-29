@@ -1,4 +1,4 @@
-# PS5 Integrated Multi-Threat Surveillance Dashboard
+# Sentinel AI
 
 Integrated real-time school/control-room surveillance system with:
 
