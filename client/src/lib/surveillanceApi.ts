@@ -78,7 +78,9 @@ export type TimelineEntry = {
 	fire: number;
 };
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8001/api/v1';
+const isProd = import.meta.env.PROD;
+const defaultApi = isProd ? 'https://ps5-jnec.onrender.com/api/v1' : 'http://localhost:8001/api/v1';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? defaultApi;
 const API_ROLE = (import.meta.env.VITE_SURVEILLANCE_ROLE as string | undefined) ?? 'admin';
 
 function toRelativeTime(isoDate: string): string {

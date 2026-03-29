@@ -24,7 +24,9 @@ function toAbsoluteVideoUrl(url: string): string {
     return url;
   }
 
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8001/api/v1';
+  const isProd = import.meta.env.PROD;
+  const defaultApi = isProd ? 'https://ps5-jnec.onrender.com/api/v1' : 'http://localhost:8001/api/v1';
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? defaultApi;
   const root = new URL(apiBase);
   root.pathname = '';
   root.search = '';
@@ -34,7 +36,9 @@ function toAbsoluteVideoUrl(url: string): string {
 }
 
 function getBackendOrigin(): string {
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8001/api/v1';
+  const isProd = import.meta.env.PROD;
+  const defaultApi = isProd ? 'https://ps5-jnec.onrender.com/api/v1' : 'http://localhost:8001/api/v1';
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? defaultApi;
   const root = new URL(apiBase);
   root.pathname = '';
   root.search = '';
