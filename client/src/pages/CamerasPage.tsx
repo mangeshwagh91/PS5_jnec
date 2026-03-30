@@ -246,14 +246,15 @@ const CamerasPage = () => {
   const focusedCameraId = searchParams.get('focus');
   const visibleCameras = getControlRoomCameraCards(cameras, videos, alerts, liveCameraIds, focusedCameraId, true);
   
-  // If no workers are running but webcam is enabled, ensure we show at least one slot
-  const wallCameras = visibleCameras.length === 0 && webcamEnabled 
-    ? [{ 
-        camera: { id: 'WEBCAM-01', name: 'User Webcam Feed', location: 'Local Testing', status: 'online' as const, threatCount: 0 }, 
-        source: '', 
-        isFocused: false 
-      }]
-    : visibleCameras.slice(0, 16);
+  if (webcamEnabled) {
+    visibleCameras.unshift({
+      camera: { id: 'WEBCAM-01', name: 'User Webcam Feed', location: 'Local Testing', status: 'online' as const, threatCount: 0 },
+      source: '',
+      isFocused: false
+    });
+  }
+
+  const wallCameras = visibleCameras.slice(0, 16);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -349,9 +350,9 @@ const CamerasPage = () => {
       {uploadMessage ? <p className="mb-3 text-xs text-muted-foreground">{uploadMessage}</p> : null}
       <div className="flex items-center gap-4 mb-4 text-xs font-mono text-muted-foreground">
         <span>TOTAL: {visibleCameras.length}</span>
-        <span className="text-success">â— ONLINE: {visibleCameras.filter(c => c.camera.status === 'online').length}</span>
-        <span className="text-destructive">â— ALERT: {visibleCameras.filter(c => c.camera.status === 'alert').length}</span>
-        <span>â— OFFLINE: {visibleCameras.filter(c => c.camera.status === 'offline').length}</span>
+        <span className="text-success">&bull; ONLINE: {visibleCameras.filter(c => c.camera.status === 'online').length}</span>
+        <span className="text-destructive">&bull; ALERT: {visibleCameras.filter(c => c.camera.status === 'alert').length}</span>
+        <span>&bull; OFFLINE: {visibleCameras.filter(c => c.camera.status === 'offline').length}</span>
       </div>
       {wallCameras.length === 0 ? (
         <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
